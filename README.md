@@ -18,5 +18,8 @@
 }
 ```
 
-Коллекция с запросами postman находится в postman/items.postman_collection.json. Запуск:
+![Архитектура](architecture/scheme.jpg)
+
+Коллекция с запросами postman находится в postman/items.postman_collection.json. 
+Запуск:
 ``` docker-compose build && docker-compose up ```
