@@ -8,11 +8,31 @@
 	"item": [
 		{
 			"name": "Create item",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
 			"request": {
 				"method": "GET",
-				"header": [],
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"laptop\",\n    \"code\": \"50\",\n    \"category\": \"device\"\n}"
+				},
 				"url": {
-					"raw": ""
+					"raw": "localhost:12345/create_item",
+					"host": [
+						"localhost"
+					],
+					"port": "12345",
+					"path": [
+						"create_item"
+					]
 				},
 				"description": "Creates item in internet shop"
 			},
@@ -24,7 +44,20 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": ""
+					"raw": "localhost:12345/remove_item?code=42",
+					"host": [
+						"localhost"
+					],
+					"port": "12345",
+					"path": [
+						"remove_item"
+					],
+					"query": [
+						{
+							"key": "code",
+							"value": "42"
+						}
+					]
 				},
 				"description": "Removes item from internet shop by code"
 			},
@@ -36,7 +69,20 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": ""
+					"raw": "localhost:12345/show_item?code=50",
+					"host": [
+						"localhost"
+					],
+					"port": "12345",
+					"path": [
+						"show_item"
+					],
+					"query": [
+						{
+							"key": "code",
+							"value": "50"
+						}
+					]
 				},
 				"description": "Shows item by code"
 			},
@@ -44,11 +90,37 @@
 		},
 		{
 			"name": "Edit item",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
 			"request": {
 				"method": "GET",
-				"header": [],
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"mac_laptop\",\n    \"code\": \"43\",\n    \"category\": \"device\"\n}"
+				},
 				"url": {
-					"raw": ""
+					"raw": "localhost:12345/edit_item?code=42",
+					"host": [
+						"localhost"
+					],
+					"port": "12345",
+					"path": [
+						"edit_item"
+					],
+					"query": [
+						{
+							"key": "code",
+							"value": "42"
+						}
+					]
 				},
 				"description": "Edits item by code, rewrites old value with new JSON"
 			},
@@ -60,7 +132,20 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": ""
+					"raw": "localhost:12345/show_items_list?category=device",
+					"host": [
+						"localhost"
+					],
+					"port": "12345",
+					"path": [
+						"show_items_list"
+					],
+					"query": [
+						{
+							"key": "category",
+							"value": "device"
+						}
+					]
 				},
 				"description": "Shows list of items by category"
 			},
