@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,6 +17,11 @@ type StoreItem struct {
 	Name     string `bson:"name" json:"name"`
 	Code     string `bson:"code" json:"code"`
 	Category string `bson:"category" json:"category"`
+}
+
+type StoreItemsList struct {
+	Count int          `json:"count"`
+	List  []*StoreItem `json:"list"`
 }
 
 func ToBsonDoc(v interface{}) (doc *bson.D, err error) {
@@ -37,10 +43,14 @@ func CreateSession(connStr string, timeout time.Duration) (*mgo.Client, error) {
 	return client, nil
 }
 
+func getItemsCollection(client *mgo.Client) *mgo.Collection {
+	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_ITEMS_COLL_NAME"))
+}
+
 func AddItem(client *mgo.Client, item *StoreItem, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := client.Database("testing").Collection("items")
+	collection := getItemsCollection(client)
 	insertRes, err := collection.InsertOne(ctx, item)
 	if err != nil {
 		return err
@@ -52,7 +62,7 @@ func AddItem(client *mgo.Client, item *StoreItem, timeout time.Duration) error {
 func DoesItemExist(client *mgo.Client, filter *bson.D, timeout time.Duration) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := client.Database("testing").Collection("items")
+	collection := getItemsCollection(client)
 	cur, err := collection.Find(ctx, *filter)
 	if err != nil {
 		return false, err
@@ -65,11 +75,11 @@ func DoesItemExist(client *mgo.Client, filter *bson.D, timeout time.Duration) (b
 	return isItemFound, nil
 }
 
-func FindItems(client *mgo.Client, filter *bson.M, timeout time.Duration) ([]*StoreItem, error) {
-	var result []*StoreItem
+func FindItems(client *mgo.Client, filter *bson.M, timeout time.Duration) (*StoreItemsList, error) {
+	var result StoreItemsList
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := client.Database("testing").Collection("items")
+	collection := getItemsCollection(client)
 	cur, err := collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -81,15 +91,16 @@ func FindItems(client *mgo.Client, filter *bson.M, timeout time.Duration) ([]*St
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, &curItem)
+		result.List = append(result.List, &curItem)
 	}
-	return result, nil
+	result.Count = len(result.List)
+	return &result, nil
 }
 
 func RemoveItem(client *mgo.Client, filter *bson.M, timeout time.Duration) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := client.Database("testing").Collection("items")
+	collection := getItemsCollection(client)
 	delRes, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return 0, err
@@ -105,7 +116,7 @@ func UpdateItem(client *mgo.Client, filter *bson.D, newItemVal *StoreItem, timeo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := client.Database("testing").Collection("items")
+	collection := getItemsCollection(client)
 	updateRes, err := collection.UpdateOne(ctx, filter, bson.D{bson.E{Key: "$set", Value: newItemBsonD}})
 	if err != nil {
 		return err
