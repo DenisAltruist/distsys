@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/DenisAltruist/distsys/db"
@@ -103,7 +104,7 @@ func showItem(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := db.FindItems(client, &filter, 5*time.Second)
+	items, err := db.FindItems(client, &filter, 0 /* offset */, 1 /* limit */, 5*time.Second)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "Can't find item with code %s, got an error: %s", filterVal, err.Error())
 		return
@@ -148,6 +149,18 @@ func removeItem(w http.ResponseWriter, r *http.Request) {
 
 func showItemsList(w http.ResponseWriter, r *http.Request) {
 	filterKey := "category"
+	offsetStr := r.FormValue("offset") // pagination
+	limitStr := r.FormValue("limit")   // pagination
+	offset, err := strconv.ParseInt(offsetStr, 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Specified offset is not correct: %s", err.Error())
+		return
+	}
+	limit, err := strconv.ParseInt(limitStr, 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Specified limit is not correct: %s", err.Error())
+		return
+	}
 	filterVal := r.FormValue(filterKey)
 	if len(filterVal) == 0 {
 		sendError(w, http.StatusBadRequest, "'%s' argument is not specified", filterKey)
@@ -158,7 +171,7 @@ func showItemsList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := db.FindItems(client, &filter, 5*time.Second)
+	items, err := db.FindItems(client, &filter, offset, limit, 5*time.Second)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "Can't remove item: %s", err.Error())
 		return

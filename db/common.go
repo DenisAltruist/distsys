@@ -75,12 +75,15 @@ func DoesItemExist(client *mgo.Client, filter *bson.D, timeout time.Duration) (b
 	return isItemFound, nil
 }
 
-func FindItems(client *mgo.Client, filter *bson.M, timeout time.Duration) (*StoreItemsList, error) {
+func FindItems(client *mgo.Client, filter *bson.M, offset int64, limit int64, timeout time.Duration) (*StoreItemsList, error) {
 	var result StoreItemsList
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	collection := getItemsCollection(client)
-	cur, err := collection.Find(ctx, filter)
+	cur, err := collection.Find(ctx, filter, &mgopts.FindOptions{
+		Skip:  &offset,
+		Limit: &limit,
+	})
 	if err != nil {
 		return nil, err
 	}

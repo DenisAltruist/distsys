@@ -126,7 +126,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:12345/show_items_list?category=device",
+					"raw": "localhost:12345/show_items_list?category=device&offset=2&limit=4",
 					"host": [
 						"localhost"
 					],
@@ -138,6 +138,14 @@
 						{
 							"key": "category",
 							"value": "device"
+						},
+						{
+							"key": "offset",
+							"value": "2"
+						},
+						{
+							"key": "limit",
+							"value": "4"
 						}
 					]
 				},
