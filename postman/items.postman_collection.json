@@ -19,16 +19,16 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"laptop\",\n    \"code\": \"60\",\n    \"category\": \"device\"\n}"
+					"raw": "{\n    \"name\": \"laptop\",\n    \"code\": \"100\",\n    \"category\": \"device\"\n}"
 				},
 				"url": {
-					"raw": "localhost:12345/create_item",
+					"raw": "localhost:12345/item",
 					"host": [
 						"localhost"
 					],
 					"port": "12345",
 					"path": [
-						"create_item"
+						"item"
 					]
 				},
 				"description": "Creates item in internet shop"
@@ -41,18 +41,18 @@
 				"method": "DELETE",
 				"header": [],
 				"url": {
-					"raw": "localhost:12345/remove_item?code=50",
+					"raw": "localhost:12345/item?code=200",
 					"host": [
 						"localhost"
 					],
 					"port": "12345",
 					"path": [
-						"remove_item"
+						"item"
 					],
 					"query": [
 						{
 							"key": "code",
-							"value": "50"
+							"value": "200"
 						}
 					]
 				},
@@ -66,18 +66,18 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:12345/show_item?code=43",
+					"raw": "localhost:12345/item?code=100",
 					"host": [
 						"localhost"
 					],
 					"port": "12345",
 					"path": [
-						"show_item"
+						"item"
 					],
 					"query": [
 						{
 							"key": "code",
-							"value": "43"
+							"value": "100"
 						}
 					]
 				},
@@ -98,21 +98,21 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"mac_laptop\",\n    \"code\": \"43\",\n    \"category\": \"device\"\n}"
+					"raw": "{\n    \"name\": \"mac_laptop\",\n    \"code\": \"60\",\n    \"category\": \"device\"\n}"
 				},
 				"url": {
-					"raw": "localhost:12345/edit_item?code=50",
+					"raw": "localhost:12345/item?code=100",
 					"host": [
 						"localhost"
 					],
 					"port": "12345",
 					"path": [
-						"edit_item"
+						"item"
 					],
 					"query": [
 						{
 							"key": "code",
-							"value": "50"
+							"value": "100"
 						}
 					]
 				},
@@ -126,13 +126,13 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:12345/show_items_list?category=device&offset=2&limit=4",
+					"raw": "localhost:12345/items?category=device&offset=0&limit=4",
 					"host": [
 						"localhost"
 					],
 					"port": "12345",
 					"path": [
-						"show_items_list"
+						"items"
 					],
 					"query": [
 						{
@@ -141,7 +141,7 @@
 						},
 						{
 							"key": "offset",
-							"value": "2"
+							"value": "0"
 						},
 						{
 							"key": "limit",
