@@ -48,7 +48,3 @@ func getItemsCollection(client *mgo.Client) *mgo.Collection {
 func getUsersCollection(client *mgo.Client) *mgo.Collection {
 	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_USERS_COLL_NAME"))
 }
-
-func getUsersTokensCollection(client *mgo.Client) *mgo.Collection {
-	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_USERS_TOKENS_COLL_NAME"))
-}

@@ -184,5 +184,6 @@ func main() {
 	router.HandleFunc("/item", showItem).Methods("GET")
 	router.HandleFunc("/item", editItem).Methods("PUT")
 	router.HandleFunc("/items", showItemsList).Methods("GET")
+	router.Use(authMiddleware())
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("EXTERNAL_LISTEN_PORT")), router))
 }

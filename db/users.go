@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 type ShopUser struct {
 	Email        string `bson:"email" json:"email"`
+	Password     string `bson:"password" json:"password"`
 	PasswordHash string `bson:"password_hash" json:"password_hash"`
 }
 
@@ -32,18 +34,23 @@ func AddNewUser(client *mgo.Client, user *ShopUser, timeout time.Duration) error
 	return nil
 }
 
-func FindUser(client *mgo.Client, filter *bson.D, timeout time.Duration) (bool, error) {
+func FindUser(client *mgo.Client, filter *bson.D, timeout time.Duration) (*ShopUser, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := getUsersTokensCollection(client)
+	collection := getUsersCollection(client)
 	cur, err := collection.Find(ctx, filter)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer cur.Close(ctx)
 	isUserFound := cur.Next(context.Background())
 	if cur.Err() != nil {
-		return false, cur.Err()
+		return nil, cur.Err()
 	}
-	return isUserFound, nil
+	if !isUserFound {
+		return nil, errors.New("Can't find such user in database")
+	}
+	var res ShopUser
+	cur.Decode(&res)
+	return &res, nil
 }

@@ -7,13 +7,13 @@ import (
 	"net/http"
 )
 
-type clientResponse struct {
+type ClientResponse struct {
 	Text string
 	Code int
 }
 
 func SendBodyResponse(w http.ResponseWriter, text string, code int) {
-	resp := clientResponse{
+	resp := ClientResponse{
 		Text: text,
 		Code: code,
 	}
