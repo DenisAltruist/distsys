@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"log"
 	"time"
 
@@ -48,7 +47,7 @@ func FindUser(client *mgo.Client, filter *bson.D, timeout time.Duration) (*ShopU
 		return nil, cur.Err()
 	}
 	if !isUserFound {
-		return nil, errors.New("Can't find such user in database")
+		return nil, nil
 	}
 	var res ShopUser
 	cur.Decode(&res)

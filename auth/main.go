@@ -11,36 +11,53 @@ import (
 	"strconv"
 	"time"
 
+	"crypto/md5"
+
 	"github.com/DenisAltruist/distsys/db"
 	"github.com/DenisAltruist/distsys/utils"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func calcPassHash(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 16)
-	return string(bytes), err
+func calcPassHash(password string) string {
+	bytes := md5.Sum([]byte(password))
+	return string(bytes[:])
+}
+
+func elapsed(what string) func() {
+	start := time.Now()
+	return func() {
+		log.Printf("%s took %v\n", what, time.Since(start))
+	}
 }
 
 func comparePass(password string, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	if err != nil {
-		log.Printf("Got an compare pass error: %s", err.Error())
+	hashByPass := calcPassHash(password)
+	if hashByPass != hash {
 		return false
 	}
-	return err == nil
+	return true
 }
 
 func issueTokens(email string) (*db.TokensPair, error) {
+	accessTokenDur, err := strconv.Atoi(os.Getenv("ACCESS_TOKENS_DURATION_MINUTES"))
+	if err != nil {
+		return nil, err
+	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": email,
-		"exp":   time.Now().Add(time.Minute * 5).Unix(),
+		"type":  "access",
+		"exp":   time.Now().Add(time.Minute * time.Duration(accessTokenDur)).Unix(),
 	})
+	refreshTokenDur, err := strconv.Atoi(os.Getenv("REFRESH_TOKENS_DURATION_MINUTES"))
+	if err != nil {
+		return nil, err
+	}
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": email,
-		"exp":   time.Now().Add(time.Minute * 10).Unix(),
+		"type":  "refresh",
+		"exp":   time.Now().Add(time.Minute * time.Duration(refreshTokenDur)).Unix(),
 	})
 	at, err := accessToken.SignedString([]byte(os.Getenv("JWT_HS256_SECRET")))
 	if err != nil {
@@ -57,7 +74,7 @@ func issueTokens(email string) (*db.TokensPair, error) {
 	}, nil
 }
 
-func validateToken(token string, duration time.Duration) (*jwt.MapClaims, error) {
+func validateToken(token string, wantTokenType string, duration time.Duration) (*jwt.MapClaims, error) {
 	decodedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -73,7 +90,8 @@ func validateToken(token string, duration time.Duration) (*jwt.MapClaims, error)
 	if claims, ok := decodedToken.Claims.(jwt.MapClaims); ok && decodedToken.Valid {
 		curTime := time.Now().Unix()
 		expirationTime := claims["exp"].(float64)
-		if int64(expirationTime) >= curTime {
+		gotTokenType := claims["type"].(string)
+		if int64(expirationTime) >= curTime && gotTokenType == wantTokenType {
 			return &claims, nil
 		}
 	}
@@ -100,13 +118,19 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	passwordHash, err := calcPassHash(newUser.Password)
-	if err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Can't hash password, got an error: %s", err.Error())
-		return
-	}
+	passwordHash := calcPassHash(newUser.Password)
 	client, ok := db.GetDbClient(w)
 	if !ok {
+		return
+	}
+	filter := bson.D{bson.E{Key: "email", Value: newUser.Email}}
+	sameUser, err := db.FindUser(client, &filter, 5*time.Second)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't check existance user in database, got an error: %s", err.Error())
+		return
+	}
+	if sameUser != nil {
+		utils.SendError(w, http.StatusBadRequest, "This email is already registered")
 		return
 	}
 	err = db.AddNewUser(client, &db.ShopUser{PasswordHash: passwordHash, Email: newUser.Email}, time.Second*5)
@@ -129,7 +153,11 @@ func signIn(w http.ResponseWriter, r *http.Request) {
 	filter := bson.D{bson.E{Key: "email", Value: user.Email}}
 	foundUser, err := db.FindUser(client, &filter, 5*time.Second)
 	if err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Can't find user with pair (email, password), got an error: %s", err.Error())
+		utils.SendError(w, http.StatusInternalServerError, "Got an error on find user: %s", err.Error())
+		return
+	}
+	if foundUser == nil {
+		utils.SendError(w, http.StatusBadRequest, "Can't find user with pair (email, password)")
 		return
 	}
 	signedIn := comparePass(user.Password, foundUser.PasswordHash)
@@ -151,23 +179,27 @@ func signIn(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s\n", string(encodedTokens))
 }
 
-func validateEncodedToken(w http.ResponseWriter, token string, durationName string) *jwt.MapClaims {
+func validateEncodedToken(w http.ResponseWriter, token string, tokenType string) *jwt.MapClaims {
+	durationName := "REFRESH_TOKENS_DURATION_MINUTES"
+	if tokenType == "access" {
+		durationName = "ACCESS_TOKENS_DURATION_MINUTES"
+	}
 	durMinutes, err := strconv.Atoi(os.Getenv(durationName))
 	if err != nil {
-		utils.SendError(w, http.StatusInternalServerError, "Can't parse %s tokens durations from config: %s", durationName, err.Error())
+		utils.SendError(w, http.StatusUnauthorized, "Can't parse %s tokens durations from config: %s", durationName, err.Error())
 		return nil
 	}
-	claims, err := validateToken(token, time.Duration(durMinutes)*time.Minute)
+	claims, err := validateToken(token, tokenType, time.Duration(durMinutes)*time.Minute)
 	if err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Token is expired or not correct: %s", err.Error())
+		utils.SendError(w, http.StatusUnauthorized, "Token is expired or not correct: %s", err.Error())
 		return nil
 	}
 	return claims
 }
 
 func refresh(w http.ResponseWriter, r *http.Request) {
-	claims := validateEncodedToken(w, r.FormValue("token"), "REFRESH_TOKENS_DURATION_MINUTES")
-	if claims == nil {
+	claims := validateEncodedToken(w, r.FormValue("token"), "refresh")
+	if claims == nil { // Response is already written in 'w'
 		return
 	}
 	tokens, err := issueTokens((*claims)["email"].(string))
@@ -185,11 +217,8 @@ func refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func validate(w http.ResponseWriter, r *http.Request) {
-	token := r.FormValue("token")
-	log.Printf("Got token: %s\n", token)
-	claims := validateEncodedToken(w, token, "ACCESS_TOKENS_DURATION_MINUTES")
+	claims := validateEncodedToken(w, r.FormValue("token"), "access")
 	if claims == nil {
-		utils.SendBodyResponse(w, "Not authorized", http.StatusOK)
 		return
 	}
 	utils.SendBodyResponse(w, "Authorized", http.StatusOK)

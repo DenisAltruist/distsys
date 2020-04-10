@@ -29,7 +29,7 @@ func authMiddleware() mux.MiddlewareFunc {
 			}
 			req, err := http.NewRequest("GET", os.Getenv("AUTH_VALIDATION_ROUTE"), nil)
 			if err != nil {
-				utils.SendError(w, http.StatusInternalServerError, "Can't create auth request: %s", err.Error())
+				utils.SendError(w, http.StatusUnauthorized, "Can't create auth request: %s", err.Error())
 				return
 			}
 			q := req.URL.Query()
@@ -40,7 +40,7 @@ func authMiddleware() mux.MiddlewareFunc {
 			}
 			resp, err := client.Do(req)
 			if err != nil {
-				utils.SendError(w, http.StatusInternalServerError, "Can't make validate GET request: %s", err.Error())
+				utils.SendError(w, http.StatusUnauthorized, "Can't make validate GET request: %s", err.Error())
 				return
 			}
 			if resp.StatusCode == http.StatusUnauthorized {
@@ -51,13 +51,13 @@ func authMiddleware() mux.MiddlewareFunc {
 			var respJson utils.ClientResponse
 			message, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				utils.SendError(w, http.StatusInternalServerError, "Can't read bytes from body of validation request: %s", err.Error())
+				utils.SendError(w, http.StatusUnauthorized, "Can't read bytes from body of validation request: %s", err.Error())
 				return
 			}
 			log.Printf("%s\n", string(message))
 			err = json.Unmarshal([]byte(string(message)), &respJson)
 			if err != nil {
-				utils.SendError(w, http.StatusInternalServerError, "Can't convert bytes from body of validation request to JSON: %s", err.Error())
+				utils.SendError(w, http.StatusUnauthorized, "Can't convert bytes from body of validation request to JSON: %s", err.Error())
 				return
 			}
 			next.ServeHTTP(w, r)
