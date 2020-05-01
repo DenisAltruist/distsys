@@ -1,7 +1,12 @@
-version: '3'
+version: '3.4'
+
+x-common-variables: &common-variables
+  MONGO_CONN_STRING: "mongodb://mongodb:27017"
+  MONGO_SHOP_DB_NAME: "testing"
+
 services:
   backend:
-    build:
+    build: 
       context: .
       dockerfile: ./shop/Dockerfile
     ports:
@@ -9,17 +14,30 @@ services:
     depends_on: 
       - mongo
     environment: 
-      MONGO_SHOP_DB_NAME: "testing"
+      <<: *common-variables
+      AUTH_VALIDATION_ROUTE: "http://auth:54321/validate"
       MONGO_ITEMS_COLL_NAME: "items"
       EXTERNAL_LISTEN_PORT: "12345"
-      MONGO_CONN_STRING: "mongodb://mongodb:27017"
+  auth:
+    container_name: auth
+    ports:
+      - "54321:54321"
+    build:
+      context: .
+      dockerfile: ./auth/Dockerfile
+    depends_on: 
+      - mongo
+    environment:
+      <<: *common-variables
+      INTERNAL_LISTEN_PORT: "54321"
+      MONGO_USERS_COLL_NAME: "users"
+      JWT_HS256_SECRET: "qwerty12345"
+      ACCESS_TOKENS_DURATION_MINUTES: 5
+      REFRESH_TOKENS_DURATION_MINUTES: 10
   mongo:
     image: mongo:latest
     container_name: "mongodb"
     environment:
       MONGO_DATA_DIR: "/data/db"
       MONGO_LOG_DIR: "/dev/null"
-    ports:
-        - 27017:27017
     command: mongod --logpath=/dev/null
- 
