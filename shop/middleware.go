@@ -24,7 +24,7 @@ func authMiddleware() mux.MiddlewareFunc {
 			}
 			authToken, err := getAuthToken(r)
 			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
+				utils.SendError(w, http.StatusUnauthorized, "Can't parse auth token, got an error: %s", err.Error())
 				return
 			}
 			req, err := http.NewRequest("GET", os.Getenv("AUTH_VALIDATION_ROUTE"), nil)
@@ -44,7 +44,7 @@ func authMiddleware() mux.MiddlewareFunc {
 				return
 			}
 			if resp.StatusCode == http.StatusUnauthorized {
-				w.WriteHeader(http.StatusUnauthorized)
+				utils.SendError(w, http.StatusUnauthorized, "Not authorized")
 				return
 			}
 			defer resp.Body.Close()

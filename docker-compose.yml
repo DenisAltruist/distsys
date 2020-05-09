@@ -2,6 +2,7 @@ version: '3.4'
 
 x-common-variables: &common-variables
   MONGO_CONN_STRING: "mongodb://mongodb:27017"
+  RABBIT_MQ_CONN_STRING: "amqp://guest:guest@rabbitmq:5672/"
   MONGO_SHOP_DB_NAME: "testing"
 
 services:
@@ -19,7 +20,7 @@ services:
       MONGO_ITEMS_COLL_NAME: "items"
       EXTERNAL_LISTEN_PORT: "12345"
   auth:
-    container_name: auth
+    container_name: "auth"
     ports:
       - "54321:54321"
     build:
@@ -30,10 +31,14 @@ services:
     environment:
       <<: *common-variables
       INTERNAL_LISTEN_PORT: "54321"
-      MONGO_USERS_COLL_NAME: "users"
+      NOTIFIER_REQ_ROUTE: "http://notifier:3435/notify"
+      AUTH_CONFIRM_ROUTE: "http://localhost:54321/confirm"
+      MONGO_PENDING_USERS_COLL_NAME: "pending_users"
+      MONGO_ACTIVE_USERS_COLL_NAME: "active_users"
       JWT_HS256_SECRET: "qwerty12345"
       ACCESS_TOKENS_DURATION_MINUTES: 5
       REFRESH_TOKENS_DURATION_MINUTES: 10
+      ACC_CONFIRMATION_DURATION_SECS: 60
   mongo:
     image: mongo:latest
     container_name: "mongodb"
@@ -41,3 +46,33 @@ services:
       MONGO_DATA_DIR: "/data/db"
       MONGO_LOG_DIR: "/dev/null"
     command: mongod --logpath=/dev/null
+  notifier:
+    container_name: "notifier"
+    build: 
+      context: .
+      dockerfile: ./notifier/Dockerfile
+    ports:
+      - "3435:3435"
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment:
+      <<: *common-variables
+      INTERNAL_LISTEN_PORT: "3435"
+      NOTIFIER_CHAN_NAME: "notifications"
+  notifier-handler-mock:
+    build:
+      context: .
+      dockerfile: ./notifier-handler-mock/Dockerfile
+    depends_on: 
+      - rabbitmq
+    environment:
+      <<: *common-variables
+      NOTIFIER_CHAN_NAME: "notifications"
+  # https://zgadzaj.com/development/docker/docker-compose/containers/rabbitmq
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672" # manager on http://localhost:15672 (username: guest, pass: guest)
+      - "5672:5672"
+

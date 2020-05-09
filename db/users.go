@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -9,10 +10,17 @@ import (
 	mgo "go.mongodb.org/mongo-driver/mongo"
 )
 
+type NotifyRequest struct {
+	Email   string `bson:"email" json:"email"`
+	Message string `bson:"message" json:"message"`
+}
+
 type ShopUser struct {
 	Email        string `bson:"email" json:"email"`
 	Password     string `bson:"password" json:"password"`
 	PasswordHash string `bson:"password_hash" json:"password_hash"`
+	ConfirmToken string `bson:"confirm_token" json:"confirm_token"`
+	CreatedAt    int64  `bson:"created_at" json:"created_at"`
 }
 
 type TokensPair struct {
@@ -21,11 +29,36 @@ type TokensPair struct {
 	RefreshToken string `bson:"refresh_token" json:"refresh_token"`
 }
 
-func AddNewUser(client *mgo.Client, user *ShopUser, timeout time.Duration) error {
+func RemoveFromPending(client *mgo.Client, user *ShopUser, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := getUsersCollection(client)
-	insertRes, err := collection.InsertOne(ctx, user)
+	pendingColl := GetPendingUsersCollection(client)
+	filter := bson.D{bson.E{Key: "confirm_token", Value: user.ConfirmToken}}
+	delRes, err := pendingColl.DeleteOne(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if delRes.DeletedCount != 1 {
+		return errors.New("Deleted count on pending user in confirmation is not 1")
+	}
+	return nil
+}
+
+func ConfirmUser(client *mgo.Client, user *ShopUser, timeout time.Duration) error {
+	err := RemoveFromPending(client, user, timeout)
+	if err != nil {
+		return err
+	}
+	user.ConfirmToken = ""
+	return AddNewUser(GetActiveUsersCollection(client), user, timeout)
+}
+
+// Collection for either pending/active users
+func AddNewUser(coll *mgo.Collection, user *ShopUser, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	user.CreatedAt = time.Now().Unix()
+	insertRes, err := coll.InsertOne(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -33,11 +66,11 @@ func AddNewUser(client *mgo.Client, user *ShopUser, timeout time.Duration) error
 	return nil
 }
 
-func FindUser(client *mgo.Client, filter *bson.D, timeout time.Duration) (*ShopUser, error) {
+// Collection for either pending/active users
+func FindUser(coll *mgo.Collection, filter *bson.D, timeout time.Duration) (*ShopUser, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	collection := getUsersCollection(client)
-	cur, err := collection.Find(ctx, filter)
+	cur, err := coll.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
