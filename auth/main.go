@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,6 +114,66 @@ func getShopUserFromReq(w http.ResponseWriter, r *http.Request) (*db.ShopUser, b
 	return &user, true
 }
 
+func confirmNewUser(w http.ResponseWriter, r *http.Request) {
+	confirmToken := r.FormValue("token")
+	client, ok := db.GetDbClient(w)
+	if !ok {
+		return
+	}
+	filter := bson.D{bson.E{Key: "confirm_token", Value: confirmToken}}
+	pendingUser, err := db.FindUser(db.GetPendingUsersCollection(client), &filter, 5*time.Second)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't check existance user in pending database, got an error: %s", err.Error())
+		return
+	}
+	if pendingUser == nil {
+		utils.SendError(w, http.StatusBadRequest, "This account is not registered yet or token is expired. Try sign up again.")
+		return
+	}
+	ttlSecs := 15
+	deadline := pendingUser.CreatedAt + int64(ttlSecs)
+	curTime := int64(time.Now().Unix())
+	fmt.Printf("Deadline: %d, cur time: %d\n", deadline, curTime)
+	if deadline < curTime {
+		db.RemoveFromPending(client, pendingUser, 5*time.Second)
+		utils.SendError(w, http.StatusBadRequest, "Token is expired. Please, sign up again")
+		return
+	}
+	err = db.ConfirmUser(client, pendingUser, 5*time.Second)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't confirm account, got an error: %s", err.Error())
+		return
+	}
+	utils.SendBodyResponse(w, "Successfully signed up!", http.StatusOK)
+}
+
+func sendRequestToNotifier(w http.ResponseWriter, email string, message string) bool {
+	reqToSend := db.NotifyRequest{
+		Email:   email,
+		Message: message,
+	}
+	encodedJson, err := json.Marshal(reqToSend)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't marshal request to json: %s", err.Error())
+		return false
+	}
+	req, err := http.NewRequest("PUT", os.Getenv("NOTIFIER_REQ_ROUTE"), bytes.NewBuffer(encodedJson))
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't create notifier request: %s", err.Error())
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	_, err = client.Do(req)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't send request: %s", err.Error())
+		return false
+	}
+	return true
+}
+
 func signUp(w http.ResponseWriter, r *http.Request) {
 	newUser, ok := getShopUserFromReq(w, r)
 	if !ok {
@@ -124,21 +185,45 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := bson.D{bson.E{Key: "email", Value: newUser.Email}}
-	sameUser, err := db.FindUser(client, &filter, 5*time.Second)
+	activeUser, err := db.FindUser(db.GetActiveUsersCollection(client), &filter, 5*time.Second)
 	if err != nil {
-		utils.SendError(w, http.StatusInternalServerError, "Can't check existance user in database, got an error: %s", err.Error())
+		utils.SendError(w, http.StatusInternalServerError, "Can't check existance user in active database, got an error: %s", err.Error())
 		return
 	}
-	if sameUser != nil {
+	if activeUser != nil {
 		utils.SendError(w, http.StatusBadRequest, "This email is already registered")
 		return
 	}
-	err = db.AddNewUser(client, &db.ShopUser{PasswordHash: passwordHash, Email: newUser.Email}, time.Second*5)
+	pendingUser, err := db.FindUser(db.GetPendingUsersCollection(client), &filter, 5*time.Second)
+	if err != nil {
+		utils.SendError(w, http.StatusInternalServerError, "Can't check existance user in pending database, got an error: %s", err.Error())
+		return
+	}
+	if pendingUser != nil {
+		utils.SendError(w, http.StatusBadRequest, "User is already pending")
+		return
+	}
+	confirmToken := utils.RandStringBytes(20)
+	log.Printf("Confirm token: %s\n", confirmToken)
+
+	// Send request to notifier service
+	confirmationLink := fmt.Sprintf("%s?token=%s", os.Getenv("AUTH_CONFIRM_ROUTE"), confirmToken)
+	message := fmt.Sprintf("Please confirm registration following this link: %s", confirmationLink)
+	log.Printf("Message: %s\n", message)
+	ok = sendRequestToNotifier(w, newUser.Email, message)
+	if !ok {
+		return
+	}
+	err = db.AddNewUser(
+		db.GetPendingUsersCollection(client),
+		&db.ShopUser{PasswordHash: passwordHash, Email: newUser.Email, ConfirmToken: confirmToken},
+		time.Second*5,
+	)
 	if err != nil {
 		utils.SendError(w, http.StatusInternalServerError, "Can't sign up new user, got an error: %s", err.Error())
 		return
 	}
-	utils.SendBodyResponse(w, "Successfully signed up!", http.StatusOK)
+	utils.SendBodyResponse(w, "Successfully signed up! The link is sent to your email", http.StatusOK)
 }
 
 func signIn(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +236,7 @@ func signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := bson.D{bson.E{Key: "email", Value: user.Email}}
-	foundUser, err := db.FindUser(client, &filter, 5*time.Second)
+	foundUser, err := db.FindUser(db.GetActiveUsersCollection(client), &filter, 5*time.Second)
 	if err != nil {
 		utils.SendError(w, http.StatusInternalServerError, "Got an error on find user: %s", err.Error())
 		return
@@ -230,5 +315,6 @@ func main() {
 	router.HandleFunc("/signin", signIn).Methods("PUT")
 	router.HandleFunc("/refresh", refresh).Methods("PUT")
 	router.HandleFunc("/validate", validate).Methods("GET")
+	router.HandleFunc("/confirm", confirmNewUser).Methods("GET")
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("INTERNAL_LISTEN_PORT")), router))
 }

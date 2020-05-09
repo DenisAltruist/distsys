@@ -3,14 +3,14 @@ RUN apk update && apk add git
 WORKDIR /go/src/github.com/DenisAltruist/distsys
 COPY utils utils
 COPY db db
-COPY shop shop
-WORKDIR /go/src/github.com/DenisAltruist/distsys/shop
+COPY notifier notifier
+WORKDIR /go/src/github.com/DenisAltruist/distsys/notifier
 RUN go get -d -v
-RUN GOOS=linux go build -o /shop
+RUN GOOS=linux go build -o /notifier
 
 FROM alpine:3.11
 # Adding ssl
 RUN apk update && apk add ca-certificates
-COPY --from=builder /shop ./
+COPY --from=builder /notifier ./
 
-CMD ["./shop"]
+CMD ["./notifier"]

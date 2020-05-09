@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 )
 
@@ -30,4 +31,13 @@ func SendError(w http.ResponseWriter, code int, formatMsg string, args ...interf
 	}
 	log.Printf(msg)
 	SendBodyResponse(w, msg, code)
+}
+
+func RandStringBytes(n int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

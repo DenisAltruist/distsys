@@ -45,6 +45,10 @@ func getItemsCollection(client *mgo.Client) *mgo.Collection {
 	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_ITEMS_COLL_NAME"))
 }
 
-func getUsersCollection(client *mgo.Client) *mgo.Collection {
-	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_USERS_COLL_NAME"))
+func GetActiveUsersCollection(client *mgo.Client) *mgo.Collection {
+	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_ACTIVE_USERS_COLL_NAME"))
+}
+
+func GetPendingUsersCollection(client *mgo.Client) *mgo.Collection {
+	return client.Database(os.Getenv("MONGO_SHOP_DB_NAME")).Collection(os.Getenv("MONGO_PENDING_USERS_COLL_NAME"))
 }
